@@ -20,8 +20,19 @@ module ripple_adder(
   output       cout
 );
 
-  wire c1, c2, c3;
+  wire [4:0] carry;
+  assign #(2) carry[0] = cin;
 
-  // TODO: your four FA_Gate instances go here.
+  genvar bit_no;
+  generate
+    for (bit_no = 0; bit_no < 4; bit_no = bit_no + 1) begin : bit_slice
+      FA_Gate add_bit (
+        .a(a[bit_no]), .b(b[bit_no]), .cin(carry[bit_no]),
+        .sum(sum[bit_no]), .cout(carry[bit_no + 1])
+      );
+    end
+  endgenerate
+
+  assign #(2) cout = carry[4];
 
 endmodule
