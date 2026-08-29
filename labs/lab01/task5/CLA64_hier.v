@@ -1,30 +1,5 @@
-// cla64_hier.v
-// BONUS -- open-ended. No detailed scaffold is provided; this is meant to
-// be a genuine design exercise. Not required for lab submission.
-//
-// You will likely need to modify cla4.v (or add signals alongside it) so
-// that block-generate/block-propagate summaries of its own Gi, Pi signals
-// are exposed as outputs, since the second-level lookahead unit below
-// needs them. As with every module in this lab from Task 2 onward, every
-// gate/assign you add should carry an explicit delay.
-//
-// Starting point (from Tutorial 3, Q4(d)):
-//   - Reuse 16 four-bit CLA blocks (your cla4.v) -- their internal logic
-//     doesn't change.
-//   - For each block k, define:
-//       Gblk_k = "this block produces a carry regardless of its incoming
-//                 carry" -- a Boolean function of that block's own 4
-//                 bit-level Gi, Pi signals.
-//       Pblk_k = "an incoming carry sails straight through this whole
-//                 block" -- likewise a function of its own Gi, Pi.
-//   - Build a second-level lookahead unit -- structurally identical to
-//     cla4.v, just one level up -- that computes each block's carry-in
-//     directly from Gblk_0..Gblk_15, Pblk_0..Pblk_15, and cin, instead of
-//     rippling block to block.
-//
-// To test this, wire it into dut.v as a fourth option (copy the pattern
-// used for the other three) and run it through the same tb.v. Compare
-// your final delay to cla64_blocked.v from Task 4.
+// Hierarchical 64-bit CLA: sixteen four-bit CLA blocks and a
+// second-level direct lookahead network for the block carry-ins.
 
 module cla64_hier(
   input  [63:0] a,
@@ -33,7 +8,54 @@ module cla64_hier(
   output [63:0] sum,
   output        cout
 );
+  wire [63:0] p, g;
+  wire [15:0] block_p, block_g;
+  wire [16:0] block_c;
+  wire [15:0] block_local_cout;
 
-  // TODO: your hierarchical design goes here.
+  genvar bit_index;
+  generate
+    for (bit_index = 0; bit_index < 64; bit_index = bit_index + 1) begin : gen_pg
+      xor #(2) p_gate(p[bit_index], a[bit_index], b[bit_index]);
+      and #(2) g_gate(g[bit_index], a[bit_index], b[bit_index]);
+    end
+  endgenerate
 
+  genvar block_index;
+  generate
+    for (block_index = 0; block_index < 16; block_index = block_index + 1) begin : gen_block_summary
+      assign #(2) block_p[block_index] = p[block_index*4+3] & p[block_index*4+2] & p[block_index*4+1] & p[block_index*4];
+      assign #(2) block_g[block_index] = g[block_index*4+3] | (p[block_index*4+3] & g[block_index*4+2]) | (p[block_index*4+3] & p[block_index*4+2] & g[block_index*4+1]) | (p[block_index*4+3] & p[block_index*4+2] & p[block_index*4+1] & g[block_index*4]);
+    end
+  endgenerate
+
+  assign #(2) block_c[0] = cin;
+  assign #(2) block_c[1] = block_g[0] | (block_p[0] & cin);
+  assign #(2) block_c[2] = block_g[1] | (block_p[1] & block_g[0]) | (block_p[1] & block_p[0] & cin);
+  assign #(2) block_c[3] = block_g[2] | (block_p[2] & block_g[1]) | (block_p[2] & block_p[1] & block_g[0]) | (block_p[2] & block_p[1] & block_p[0] & cin);
+  assign #(2) block_c[4] = block_g[3] | (block_p[3] & block_g[2]) | (block_p[3] & block_p[2] & block_g[1]) | (block_p[3] & block_p[2] & block_p[1] & block_g[0]) | (block_p[3] & block_p[2] & block_p[1] & block_p[0] & cin);
+  assign #(2) block_c[5] = block_g[4] | (block_p[4] & block_g[3]) | (block_p[4] & block_p[3] & block_g[2]) | (block_p[4] & block_p[3] & block_p[2] & block_g[1]) | (block_p[4] & block_p[3] & block_p[2] & block_p[1] & block_g[0]) | (block_p[4] & block_p[3] & block_p[2] & block_p[1] & block_p[0] & cin);
+  assign #(2) block_c[6] = block_g[5] | (block_p[5] & block_g[4]) | (block_p[5] & block_p[4] & block_g[3]) | (block_p[5] & block_p[4] & block_p[3] & block_g[2]) | (block_p[5] & block_p[4] & block_p[3] & block_p[2] & block_g[1]) | (block_p[5] & block_p[4] & block_p[3] & block_p[2] & block_p[1] & block_g[0]) | (block_p[5] & block_p[4] & block_p[3] & block_p[2] & block_p[1] & block_p[0] & cin);
+  assign #(2) block_c[7] = block_g[6] | (block_p[6] & block_g[5]) | (block_p[6] & block_p[5] & block_g[4]) | (block_p[6] & block_p[5] & block_p[4] & block_g[3]) | (block_p[6] & block_p[5] & block_p[4] & block_p[3] & block_g[2]) | (block_p[6] & block_p[5] & block_p[4] & block_p[3] & block_p[2] & block_g[1]) | (block_p[6] & block_p[5] & block_p[4] & block_p[3] & block_p[2] & block_p[1] & block_g[0]) | (block_p[6] & block_p[5] & block_p[4] & block_p[3] & block_p[2] & block_p[1] & block_p[0] & cin);
+  assign #(2) block_c[8] = block_g[7] | (block_p[7] & block_g[6]) | (block_p[7] & block_p[6] & block_g[5]) | (block_p[7] & block_p[6] & block_p[5] & block_g[4]) | (block_p[7] & block_p[6] & block_p[5] & block_p[4] & block_g[3]) | (block_p[7] & block_p[6] & block_p[5] & block_p[4] & block_p[3] & block_g[2]) | (block_p[7] & block_p[6] & block_p[5] & block_p[4] & block_p[3] & block_p[2] & block_g[1]) | (block_p[7] & block_p[6] & block_p[5] & block_p[4] & block_p[3] & block_p[2] & block_p[1] & block_g[0]) | (block_p[7] & block_p[6] & block_p[5] & block_p[4] & block_p[3] & block_p[2] & block_p[1] & block_p[0] & cin);
+  assign #(2) block_c[9] = block_g[8] | (block_p[8] & block_g[7]) | (block_p[8] & block_p[7] & block_g[6]) | (block_p[8] & block_p[7] & block_p[6] & block_g[5]) | (block_p[8] & block_p[7] & block_p[6] & block_p[5] & block_g[4]) | (block_p[8] & block_p[7] & block_p[6] & block_p[5] & block_p[4] & block_g[3]) | (block_p[8] & block_p[7] & block_p[6] & block_p[5] & block_p[4] & block_p[3] & block_g[2]) | (block_p[8] & block_p[7] & block_p[6] & block_p[5] & block_p[4] & block_p[3] & block_p[2] & block_g[1]) | (block_p[8] & block_p[7] & block_p[6] & block_p[5] & block_p[4] & block_p[3] & block_p[2] & block_p[1] & block_g[0]) | (block_p[8] & block_p[7] & block_p[6] & block_p[5] & block_p[4] & block_p[3] & block_p[2] & block_p[1] & block_p[0] & cin);
+  assign #(2) block_c[10] = block_g[9] | (block_p[9] & block_g[8]) | (block_p[9] & block_p[8] & block_g[7]) | (block_p[9] & block_p[8] & block_p[7] & block_g[6]) | (block_p[9] & block_p[8] & block_p[7] & block_p[6] & block_g[5]) | (block_p[9] & block_p[8] & block_p[7] & block_p[6] & block_p[5] & block_g[4]) | (block_p[9] & block_p[8] & block_p[7] & block_p[6] & block_p[5] & block_p[4] & block_g[3]) | (block_p[9] & block_p[8] & block_p[7] & block_p[6] & block_p[5] & block_p[4] & block_p[3] & block_g[2]) | (block_p[9] & block_p[8] & block_p[7] & block_p[6] & block_p[5] & block_p[4] & block_p[3] & block_p[2] & block_g[1]) | (block_p[9] & block_p[8] & block_p[7] & block_p[6] & block_p[5] & block_p[4] & block_p[3] & block_p[2] & block_p[1] & block_g[0]) | (block_p[9] & block_p[8] & block_p[7] & block_p[6] & block_p[5] & block_p[4] & block_p[3] & block_p[2] & block_p[1] & block_p[0] & cin);
+  assign #(2) block_c[11] = block_g[10] | (block_p[10] & block_g[9]) | (block_p[10] & block_p[9] & block_g[8]) | (block_p[10] & block_p[9] & block_p[8] & block_g[7]) | (block_p[10] & block_p[9] & block_p[8] & block_p[7] & block_g[6]) | (block_p[10] & block_p[9] & block_p[8] & block_p[7] & block_p[6] & block_g[5]) | (block_p[10] & block_p[9] & block_p[8] & block_p[7] & block_p[6] & block_p[5] & block_g[4]) | (block_p[10] & block_p[9] & block_p[8] & block_p[7] & block_p[6] & block_p[5] & block_p[4] & block_g[3]) | (block_p[10] & block_p[9] & block_p[8] & block_p[7] & block_p[6] & block_p[5] & block_p[4] & block_p[3] & block_g[2]) | (block_p[10] & block_p[9] & block_p[8] & block_p[7] & block_p[6] & block_p[5] & block_p[4] & block_p[3] & block_p[2] & block_g[1]) | (block_p[10] & block_p[9] & block_p[8] & block_p[7] & block_p[6] & block_p[5] & block_p[4] & block_p[3] & block_p[2] & block_p[1] & block_g[0]) | (block_p[10] & block_p[9] & block_p[8] & block_p[7] & block_p[6] & block_p[5] & block_p[4] & block_p[3] & block_p[2] & block_p[1] & block_p[0] & cin);
+  assign #(2) block_c[12] = block_g[11] | (block_p[11] & block_g[10]) | (block_p[11] & block_p[10] & block_g[9]) | (block_p[11] & block_p[10] & block_p[9] & block_g[8]) | (block_p[11] & block_p[10] & block_p[9] & block_p[8] & block_g[7]) | (block_p[11] & block_p[10] & block_p[9] & block_p[8] & block_p[7] & block_g[6]) | (block_p[11] & block_p[10] & block_p[9] & block_p[8] & block_p[7] & block_p[6] & block_g[5]) | (block_p[11] & block_p[10] & block_p[9] & block_p[8] & block_p[7] & block_p[6] & block_p[5] & block_g[4]) | (block_p[11] & block_p[10] & block_p[9] & block_p[8] & block_p[7] & block_p[6] & block_p[5] & block_p[4] & block_g[3]) | (block_p[11] & block_p[10] & block_p[9] & block_p[8] & block_p[7] & block_p[6] & block_p[5] & block_p[4] & block_p[3] & block_g[2]) | (block_p[11] & block_p[10] & block_p[9] & block_p[8] & block_p[7] & block_p[6] & block_p[5] & block_p[4] & block_p[3] & block_p[2] & block_g[1]) | (block_p[11] & block_p[10] & block_p[9] & block_p[8] & block_p[7] & block_p[6] & block_p[5] & block_p[4] & block_p[3] & block_p[2] & block_p[1] & block_g[0]) | (block_p[11] & block_p[10] & block_p[9] & block_p[8] & block_p[7] & block_p[6] & block_p[5] & block_p[4] & block_p[3] & block_p[2] & block_p[1] & block_p[0] & cin);
+  assign #(2) block_c[13] = block_g[12] | (block_p[12] & block_g[11]) | (block_p[12] & block_p[11] & block_g[10]) | (block_p[12] & block_p[11] & block_p[10] & block_g[9]) | (block_p[12] & block_p[11] & block_p[10] & block_p[9] & block_g[8]) | (block_p[12] & block_p[11] & block_p[10] & block_p[9] & block_p[8] & block_g[7]) | (block_p[12] & block_p[11] & block_p[10] & block_p[9] & block_p[8] & block_p[7] & block_g[6]) | (block_p[12] & block_p[11] & block_p[10] & block_p[9] & block_p[8] & block_p[7] & block_p[6] & block_g[5]) | (block_p[12] & block_p[11] & block_p[10] & block_p[9] & block_p[8] & block_p[7] & block_p[6] & block_p[5] & block_g[4]) | (block_p[12] & block_p[11] & block_p[10] & block_p[9] & block_p[8] & block_p[7] & block_p[6] & block_p[5] & block_p[4] & block_g[3]) | (block_p[12] & block_p[11] & block_p[10] & block_p[9] & block_p[8] & block_p[7] & block_p[6] & block_p[5] & block_p[4] & block_p[3] & block_g[2]) | (block_p[12] & block_p[11] & block_p[10] & block_p[9] & block_p[8] & block_p[7] & block_p[6] & block_p[5] & block_p[4] & block_p[3] & block_p[2] & block_g[1]) | (block_p[12] & block_p[11] & block_p[10] & block_p[9] & block_p[8] & block_p[7] & block_p[6] & block_p[5] & block_p[4] & block_p[3] & block_p[2] & block_p[1] & block_g[0]) | (block_p[12] & block_p[11] & block_p[10] & block_p[9] & block_p[8] & block_p[7] & block_p[6] & block_p[5] & block_p[4] & block_p[3] & block_p[2] & block_p[1] & block_p[0] & cin);
+  assign #(2) block_c[14] = block_g[13] | (block_p[13] & block_g[12]) | (block_p[13] & block_p[12] & block_g[11]) | (block_p[13] & block_p[12] & block_p[11] & block_g[10]) | (block_p[13] & block_p[12] & block_p[11] & block_p[10] & block_g[9]) | (block_p[13] & block_p[12] & block_p[11] & block_p[10] & block_p[9] & block_g[8]) | (block_p[13] & block_p[12] & block_p[11] & block_p[10] & block_p[9] & block_p[8] & block_g[7]) | (block_p[13] & block_p[12] & block_p[11] & block_p[10] & block_p[9] & block_p[8] & block_p[7] & block_g[6]) | (block_p[13] & block_p[12] & block_p[11] & block_p[10] & block_p[9] & block_p[8] & block_p[7] & block_p[6] & block_g[5]) | (block_p[13] & block_p[12] & block_p[11] & block_p[10] & block_p[9] & block_p[8] & block_p[7] & block_p[6] & block_p[5] & block_g[4]) | (block_p[13] & block_p[12] & block_p[11] & block_p[10] & block_p[9] & block_p[8] & block_p[7] & block_p[6] & block_p[5] & block_p[4] & block_g[3]) | (block_p[13] & block_p[12] & block_p[11] & block_p[10] & block_p[9] & block_p[8] & block_p[7] & block_p[6] & block_p[5] & block_p[4] & block_p[3] & block_g[2]) | (block_p[13] & block_p[12] & block_p[11] & block_p[10] & block_p[9] & block_p[8] & block_p[7] & block_p[6] & block_p[5] & block_p[4] & block_p[3] & block_p[2] & block_g[1]) | (block_p[13] & block_p[12] & block_p[11] & block_p[10] & block_p[9] & block_p[8] & block_p[7] & block_p[6] & block_p[5] & block_p[4] & block_p[3] & block_p[2] & block_p[1] & block_g[0]) | (block_p[13] & block_p[12] & block_p[11] & block_p[10] & block_p[9] & block_p[8] & block_p[7] & block_p[6] & block_p[5] & block_p[4] & block_p[3] & block_p[2] & block_p[1] & block_p[0] & cin);
+  assign #(2) block_c[15] = block_g[14] | (block_p[14] & block_g[13]) | (block_p[14] & block_p[13] & block_g[12]) | (block_p[14] & block_p[13] & block_p[12] & block_g[11]) | (block_p[14] & block_p[13] & block_p[12] & block_p[11] & block_g[10]) | (block_p[14] & block_p[13] & block_p[12] & block_p[11] & block_p[10] & block_g[9]) | (block_p[14] & block_p[13] & block_p[12] & block_p[11] & block_p[10] & block_p[9] & block_g[8]) | (block_p[14] & block_p[13] & block_p[12] & block_p[11] & block_p[10] & block_p[9] & block_p[8] & block_g[7]) | (block_p[14] & block_p[13] & block_p[12] & block_p[11] & block_p[10] & block_p[9] & block_p[8] & block_p[7] & block_g[6]) | (block_p[14] & block_p[13] & block_p[12] & block_p[11] & block_p[10] & block_p[9] & block_p[8] & block_p[7] & block_p[6] & block_g[5]) | (block_p[14] & block_p[13] & block_p[12] & block_p[11] & block_p[10] & block_p[9] & block_p[8] & block_p[7] & block_p[6] & block_p[5] & block_g[4]) | (block_p[14] & block_p[13] & block_p[12] & block_p[11] & block_p[10] & block_p[9] & block_p[8] & block_p[7] & block_p[6] & block_p[5] & block_p[4] & block_g[3]) | (block_p[14] & block_p[13] & block_p[12] & block_p[11] & block_p[10] & block_p[9] & block_p[8] & block_p[7] & block_p[6] & block_p[5] & block_p[4] & block_p[3] & block_g[2]) | (block_p[14] & block_p[13] & block_p[12] & block_p[11] & block_p[10] & block_p[9] & block_p[8] & block_p[7] & block_p[6] & block_p[5] & block_p[4] & block_p[3] & block_p[2] & block_g[1]) | (block_p[14] & block_p[13] & block_p[12] & block_p[11] & block_p[10] & block_p[9] & block_p[8] & block_p[7] & block_p[6] & block_p[5] & block_p[4] & block_p[3] & block_p[2] & block_p[1] & block_g[0]) | (block_p[14] & block_p[13] & block_p[12] & block_p[11] & block_p[10] & block_p[9] & block_p[8] & block_p[7] & block_p[6] & block_p[5] & block_p[4] & block_p[3] & block_p[2] & block_p[1] & block_p[0] & cin);
+  assign #(2) block_c[16] = block_g[15] | (block_p[15] & block_g[14]) | (block_p[15] & block_p[14] & block_g[13]) | (block_p[15] & block_p[14] & block_p[13] & block_g[12]) | (block_p[15] & block_p[14] & block_p[13] & block_p[12] & block_g[11]) | (block_p[15] & block_p[14] & block_p[13] & block_p[12] & block_p[11] & block_g[10]) | (block_p[15] & block_p[14] & block_p[13] & block_p[12] & block_p[11] & block_p[10] & block_g[9]) | (block_p[15] & block_p[14] & block_p[13] & block_p[12] & block_p[11] & block_p[10] & block_p[9] & block_g[8]) | (block_p[15] & block_p[14] & block_p[13] & block_p[12] & block_p[11] & block_p[10] & block_p[9] & block_p[8] & block_g[7]) | (block_p[15] & block_p[14] & block_p[13] & block_p[12] & block_p[11] & block_p[10] & block_p[9] & block_p[8] & block_p[7] & block_g[6]) | (block_p[15] & block_p[14] & block_p[13] & block_p[12] & block_p[11] & block_p[10] & block_p[9] & block_p[8] & block_p[7] & block_p[6] & block_g[5]) | (block_p[15] & block_p[14] & block_p[13] & block_p[12] & block_p[11] & block_p[10] & block_p[9] & block_p[8] & block_p[7] & block_p[6] & block_p[5] & block_g[4]) | (block_p[15] & block_p[14] & block_p[13] & block_p[12] & block_p[11] & block_p[10] & block_p[9] & block_p[8] & block_p[7] & block_p[6] & block_p[5] & block_p[4] & block_g[3]) | (block_p[15] & block_p[14] & block_p[13] & block_p[12] & block_p[11] & block_p[10] & block_p[9] & block_p[8] & block_p[7] & block_p[6] & block_p[5] & block_p[4] & block_p[3] & block_g[2]) | (block_p[15] & block_p[14] & block_p[13] & block_p[12] & block_p[11] & block_p[10] & block_p[9] & block_p[8] & block_p[7] & block_p[6] & block_p[5] & block_p[4] & block_p[3] & block_p[2] & block_g[1]) | (block_p[15] & block_p[14] & block_p[13] & block_p[12] & block_p[11] & block_p[10] & block_p[9] & block_p[8] & block_p[7] & block_p[6] & block_p[5] & block_p[4] & block_p[3] & block_p[2] & block_p[1] & block_g[0]) | (block_p[15] & block_p[14] & block_p[13] & block_p[12] & block_p[11] & block_p[10] & block_p[9] & block_p[8] & block_p[7] & block_p[6] & block_p[5] & block_p[4] & block_p[3] & block_p[2] & block_p[1] & block_p[0] & cin);
+
+  generate
+    for (block_index = 0; block_index < 16; block_index = block_index + 1) begin : gen_cla
+      cla4 block_adder (
+        .a(a[block_index*4 +: 4]), .b(b[block_index*4 +: 4]),
+        .cin(block_c[block_index]), .sum(sum[block_index*4 +: 4]),
+        .cout(block_local_cout[block_index])
+      );
+    end
+  endgenerate
+
+  assign #(2) cout = block_c[16];
 endmodule
