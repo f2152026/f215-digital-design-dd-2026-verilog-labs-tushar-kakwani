@@ -18,8 +18,19 @@ module rca(
   output       cout
 );
 
-  wire c1, c2, c3;
+  wire [4:0] carry;
+  assign #(2) carry[0] = cin;
 
-  // TODO: your four FA_Gate instances go here.
+  genvar stage;
+  generate
+    for (stage = 0; stage < 4; stage = stage + 1) begin : stages
+      FA_Gate u_fa (
+        .a(a[stage]), .b(b[stage]), .cin(carry[stage]),
+        .sum(sum[stage]), .cout(carry[stage + 1])
+      );
+    end
+  endgenerate
+
+  assign #(2) cout = carry[4];
 
 endmodule
